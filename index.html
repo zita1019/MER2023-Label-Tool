@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>MER2023 协作标注平台</title>
+    <style>
+        :root { --primary: #1890ff; --success: #52c41a; --danger: #ff4d4f; }
+        body { font-family: -apple-system, sans-serif; background: #f5f7f9; margin: 0; display: flex; flex-direction: column; height: 100vh; }
+        header { background: #001529; color: white; padding: 10px 20px; display: flex; justify-content: space-between; align-items: center; }
+        .container { display: flex; flex: 1; overflow: hidden; gap: 20px; padding: 20px; }
+        .video-section { flex: 2; background: white; border-radius: 8px; padding: 20px; display: flex; flex-direction: column; }
+        .sidebar { flex: 1; background: white; border-radius: 8px; padding: 20px; display: flex; flex-direction: column; }
+        video { width: 100%; border-radius: 4px; background: #000; flex-grow: 1; }
+        .controls { margin-top: 15px; display: flex; gap: 10px; }
+        select, input { padding: 8px; border: 1px solid #ddd; border-radius: 4px; }
+        button { padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; color: white; font-weight: bold; }
+        .log-area { flex: 1; margin-top: 10px; font-family: monospace; font-size: 12px; background: #fafafa; border: 1px solid #eee; padding: 10px; overflow-y: auto; white-space: pre; }
+    </style>
+</head>
+<body>
+
+<header>
+    <div><strong>MER2023 标注平台</strong> <span id="user-display" style="margin-left:20px; color:#aaa;"></span></div>
+    <div>
+        情绪筛选：
+        <select id="folder-filter" onchange="filterVideos()">
+            <option value="all">全部显示</option>
+            <option value="angry">Angry</option>
+            <option value="happy">Happy</option>
+            <option value="neutral">Neutral</option>
+            <option value="sad">Sad</option>
+            <option value="surprise">Surprise</option>
+            <option value="worried">Worried</option>
+        </select>
+    </div>
+</header>
+
+<div class="container">
+    <div class="video-section">
+        <h4 id="video-title">正在加载视频列表...</h4>
+        <video id="main-player" controls autoplay></video>
+        <div class="controls">
+            <button style="background:var(--success)" onclick="record('Single')">单一情绪 (Space)</button>
+            <button style="background:var(--danger)" onclick="record('Mixed')">杂质/混合 (M)</button>
+            <button style="background:#8c8c8c" onclick="skip()">跳过 (N)</button>
+        </div>
+    </div>
+
+    <div class="sidebar">
+        <label>时序标注 (Onset-Apex-Offset):</label>
+        <input type="text" id="temporal-input" placeholder="例如: 1.2-2.5-3.8">
+        <div style="margin-top:10px;">数据预览:</div>
+        <div id="log-view" class="log-area"></div>
+        <button style="background:var(--primary); width:100%; margin-top:10px;" onclick="downloadCSV()">导出我的标注结果 (CSV)</button>
+    </div>
+</div>
+
+<script>
+    // --- 配置区 ---
+    const BASE_URL = "https://你的域名.r2.dev/"; // 记得换成你的！
+    
+    // 这里建议你手动把 video_data.json 里的数组贴进来，或者通过 fetch 加载
+    let allFiles = [
+        {Path: "angry/vid01.mp4"}, {Path: "happy/vid02.mp4"} // 这里是占位符
+    ];
+    
+    let filteredList = [];
+    let currentIndex = 0;
+    let userName = "";
+
+    // --- 初始化 ---
+    window.onload = async () => {
+        userName = prompt("请输入您的姓名（用于记录标注者信息）:") || "Anonymous";
+        document.getElementById('user-display').innerText = `当前标注者: ${userName}`;
+        
+        // 如果你有 video_data.json 文件，可以取消下面注释进行动态加载
+        // const res = await fetch('video_data.json');
+        // allFiles = await res.json();
+        
+        filterVideos();
+    };
+
+    function filterVideos() {
+        const folder = document.getElementById('folder-filter').value;
+        filteredList = folder === "all" ? allFiles : allFiles.filter(f => f.Path.startsWith(folder));
+        currentIndex = 0;
+        loadVideo();
+    }
+
+    function loadVideo() {
+        if (filteredList.length === 0) return;
+        const file = filteredList[currentIndex];
+        document.getElementById('video-title').innerText = `[${currentIndex + 1}/${filteredList.length}] ${file.Path}`;
+        document.getElementById('main-player').src = BASE_URL + file.Path;
+    }
+
+    function record(status) {
+        const temporal = document.getElementById('temporal-input').value;
+        const file = filteredList[currentIndex].Path;
+        const timestamp = new Date().toLocaleString();
+        const line = `"${file}","${status}","${temporal}","${userName}","${timestamp}"\n`;
+        
+        document.getElementById('log-view').innerText += line;
+        document.getElementById('temporal-input').value = "";
+        
+        currentIndex++;
+        loadVideo();
+    }
+
+    function skip() { currentIndex++; loadVideo(); }
+
+    function downloadCSV() {
+        const header = "File,Status,Temporal,Annotator,Timestamp\n";
+        const content = header + document.getElementById('log-view').innerText;
+        const blob = new Blob([content], {type: 'text/csv'});
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `Label_${userName}_${new Date().getTime()}.csv`;
+        a.click();
+    }
+
+    // 快捷键支持
+    window.addEventListener('keydown', (e) => {
+        if (e.code === 'Space') { e.preventDefault(); record('Single'); }
+        if (e.key === 'm' || e.key === 'M') record('Mixed');
+        if (e.key === 'n' || e.key === 'N') skip();
+    });
+</script>
+</body>
+</html>
