@@ -6,52 +6,7 @@
     <title>MER2023 增强标注平台 - 文件级控制版</title>
     <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 
-    <script>
-        // 2. 初始化配置 (在 Project Settings -> API 找这两个值)
-        const supabaseUrl = "https://oykuesuwzycrspieezpx.supabase.co";
-        const supabaseKey = "sb_publishable_3dG8NUlHg65kwqOfDGIBrw_gc96LR-v";
-        const _supabase = supabase.createClient(supabaseUrl, supabaseKey, {
-            auth: {
-                persistSession: false // 禁用持久化存储，绕过浏览器对存储的拦截
-            }
-        });
 
-        // 3. 修改原有的 save 函数
-        async function save(status) {
-            const time = document.getElementById('temporal').value;
-            const arous = parseInt(document.getElementById('arousal').value);
-            const conf = parseInt(document.getElementById('conf').value);
-            const file = filteredList[currentIndex].Path;
-
-            // A. 原有的本地记录逻辑（保留作为备份）
-            const line = `"${file}","${status}","${time}","${arous}","${conf}","${annotator}","${new Date().toLocaleString()}"\n`;
-            document.getElementById('csv-preview').value += line;
-
-            // B. 新增：实时同步到云端数据库
-            try {
-                const { error } = await _supabase
-                    .from('mer_labels')
-                    .insert([
-                        {
-                            file_path: file,
-                            label_type: status,
-                            temporal: time,
-                            arousal: arous,
-                            confidence: conf,
-                            annotator: annotator
-                        }
-                    ]);
-                if (error) console.error('同步失败:', error);
-            } catch (err) {
-                console.error('网络异常:', err);
-            }
-
-            // C. 后续跳转逻辑
-            document.getElementById('temporal').value = "";
-            currentIndex++;
-            loadVideo();
-        }
-    </script>
 
     <style>
         :root {
@@ -308,6 +263,14 @@
     <script>
         // --- 配置区 ---
         const BASE_URL = "https://pub-7988c9a2afce47108148b34c1a934ce6.r2.dev/";
+        // Supabase 配置
+        const supabaseUrl = "https://oykuesuwzycrspieezpx.supabase.co";
+        const supabaseKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im95a3Vlc3V3enljcnNwaWVlenB4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA3ODM0NjksImV4cCI6MjA4NjM1OTQ2OX0.J3j4ZgtgvqMVkZDw6zQSHTOgh_Ozn68mHKsSkj4pS0E";
+        const _supabase = supabase.createClient(supabaseUrl, supabaseKey, {
+            auth: {
+                persistSession: false // 禁用持久化存储，绕过浏览器对存储的拦截
+            }
+        });
 
         let filteredList = [];
         let currentIndex = 0;
@@ -378,18 +341,41 @@
 
         }
 
-        function save() {
+        async function save() {
             const typeEls = document.getElementsByName('emotionType');
             let status = 'Single';
             for (let el of typeEls) { if (el.checked) status = el.value; }
 
-            const arous = document.getElementById('arousal').value;
-            const conf = document.getElementById('conf').value;
+            const arous = parseInt(document.getElementById('arousal').value);
+            const conf = parseInt(document.getElementById('conf').value);
             const file = filteredList[currentIndex].Path;
 
-            // 核心记录逻辑
+            // A. 本地记录逻辑 (CSV 预览)
             const line = `"${file}","${status}","${conf}","${arous}","${annotator}","${new Date().toLocaleString()}"\n`;
             document.getElementById('csv-preview').value += line;
+
+            // B. 实时同步到云端数据库
+            try {
+                const { error } = await _supabase
+                    .from('mer_labels')
+                    .insert([
+                        {
+                            file_path: file,
+                            label_type: status,
+                            arousal: arous,
+                            confidence: conf,
+                            annotator: annotator
+                        }
+                    ]);
+                if (error) {
+                    console.error('Supabase Error:', error);
+                    alert('数据同步失败，请检查控制台 (F12)');
+                } else {
+                    console.log('Saved to Supabase');
+                }
+            } catch (err) {
+                console.error('Network Error:', err);
+            }
 
             // 重置 UI
             typeEls[0].checked = true;
